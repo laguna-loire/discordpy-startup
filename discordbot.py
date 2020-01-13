@@ -384,6 +384,16 @@ class Mariage:
                 if end_time > now:
                     return end_time - datetime.timedelta(days=1)
                 return end_time
+            if re.match('^[0-2][0-9][0-5][0-9][0-5][0-9]$', str_date):
+                end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date[0:2] + ':' + str_date[2:2] + ':' + str_date[4:2] + '+0900', '%Y/%m/%d %H:%M:%S%z')
+                if end_time > now:
+                    return end_time - datetime.timedelta(days=1)
+                return end_time
+            if re.match('^[0-2][0-9][0-5][0-9]$', str_date):
+                end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date[0:2] + ':' + str_date[2:2] + ':00+0900', '%Y/%m/%d %H:%M:%S%z')
+                if end_time > now:
+                    return end_time - datetime.timedelta(days=1)
+                return end_time
             if re.match('^[0-5]?[0-9]$', str_date):
                 end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day) + ' ' + str(now.hour) + ':' + str_date + ':00+0900', '%Y/%m/%d %H:%M:%S%z')
                 if end_time > now:
