@@ -13,6 +13,7 @@ import re
 import datetime
 import pytz
 import math
+import random
 
 class Mariage:
     client = None
@@ -106,6 +107,7 @@ class Mariage:
         # ユーザID使う
         id = Column(Integer, primary_key=True)
         name = Column(String(256))
+        voice = Column(Integer, nullable=False, default=0)
 
         def __init__(self, id, name):
             self.name = name
@@ -460,7 +462,7 @@ class Mariage:
             # 「/callme」と発言したら呼び名設定
             elif message.content.startswith('/callme '):
                 items = message.content.split()
-                re_hiragana = re.compile(r'^[あ-ん]+$')
+                re_hiragana = re.compile(r'^[ぁ-んー]+$')
                 if not re_hiragana.fullmatch(items[1]):
                     await message.channel.send('名前は全部ひらがなで設定してねっ')
                     return
@@ -473,6 +475,24 @@ class Mariage:
                         voice_setting.name = items[1]
                     self.db.session.commit()
                     await message.channel.send('今度から「' + message.author.display_name + '」のこと「' + voice_setting.name + '」って呼ぶねっ')
+            # 「/voice」と発言したら呼び名設定
+            elif message.content.startswith('/voice '):
+                items = message.content.split()
+                re_hiragana = re.compile(r'^[0-5r]+$', re.IGNORECASE)
+                if not re_hiragana.fullmatch(items[1]):
+                    await message.channel.send('0-5またはrで設定してねっ')
+                    return
+                htsvoice = random.randint(0, 5) if items[1] == 'r' or items[1] == 'R' else int(items[1])
+                with self.app.app_context():
+                    voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
+                    if voice_setting == None:
+                        voice_setting = self.VoiceSetting(message.author.id, message.author.display_name)
+                        voice_setting.voice = htsvoice
+                        self.db.session.add(voice_setting)
+                    else:
+                        voice_setting.voice = htsvoice
+                    self.db.session.commit()
+                    await message.channel.send('声変わり完了！')
             else:
                 with self.app.app_context():
                     voice = self.db.session.query(self.Voice).filter_by(id=message.author.id,channel_id=str(message.channel.id)).first()
@@ -480,7 +500,8 @@ class Mariage:
                         return
                     voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
                     name = message.author.display_name if voice_setting == None else voice_setting.name
-                    self.__jtalk.talk(name + ' ' +message.content, message.author)
+                    htsvoice = 0 if voice_setting == None else voice_setting.voice
+                    self.__jtalk.talk(name + ' ' +message.content, message.author, htsvoice)
 
         def __get_end_time(str_date, now):
             if re.match('^[0-2]?[0-9]:[0-5]?[0-9]:[0-5]?[0-9]$', str_date):

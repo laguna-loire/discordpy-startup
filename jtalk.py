@@ -41,17 +41,17 @@ class Jtalk:
             await voice.disconnect(force=True)
             del self.ch_dict[voice_id]
 
-    def talk(self, t, author):
+    def talk(self, t, author, htsvoice=0):
         if author.id in self.voice_dict:
             voice = self.ch_dict[self.voice_dict[author.id]]
             wav = './wav/' + str(author.id) + '.wav'
-            asyncio.ensure_future(self.jtalk(t, wav, voice), loop=self.loop)
+            asyncio.ensure_future(self.jtalk(t, wav, voice, htsvoice), loop=self.loop)
 
-    async def jtalk(self, t, output, voice):
+    async def jtalk(self, t, output, voice, htsvoice):
         
         open_jtalk=[os.environ['JTALK']]
         mech=['-x',os.environ['JTALK_DIC']]
-        htsvoice=['-m','./voice/mai.htsvoice']
+        htsvoice=['-m','./voice/' + str(htsvoice) + '.htsvoice']
         speed=['-r','1.0']
         outwav=['-ow',output]
         cmd=open_jtalk+mech+htsvoice+speed+outwav
