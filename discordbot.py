@@ -3,6 +3,7 @@ from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, o
 from sqlalchemy.orm import relationship
 from one_time_scheduler import OneTimeScheduler
 from itertools import groupby
+from jtalk import Jtalk
 import discord
 import os
 import traceback
@@ -12,12 +13,14 @@ import re
 import datetime
 import pytz
 import math
+import random
 
 class Mariage:
     client = None
     app = None
     db = SQLAlchemy()
     __scheduler = OneTimeScheduler()
+    __jtalk = Jtalk()
 
     def __init__(self, app):
         self.db.init_app(app)
@@ -87,12 +90,39 @@ class Mariage:
         
         def __repr__(self):
             return '<Schedule %r>' % self.pop_time
+    
+    class Voice(db.Model):
+        # ユーザID使う
+        id = Column(Integer, primary_key=True)
+        channel_id = Column(String(18), nullable=False, index=True)
+
+        def __init__(self, id, channel_id):
+            self.channel_id = channel_id
+            self.id = id
+        
+        def __repr__(self):
+            return '<Voice %r>' % self.id
+    
+    class VoiceSetting(db.Model):
+        # ユーザID使う
+        id = Column(Integer, primary_key=True)
+        name = Column(String(256))
+        voice = Column(Integer, nullable=False, default=0)
+
+        def __init__(self, id, name):
+            self.name = name
+            self.id = id
+        
+        def __repr__(self):
+            return '<VoiceSetting %r>' % self.id
         
     def run(self, token):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         self.client = discord.Client()
         self.__scheduler.run_asyncio(loop)
+        
+        self.__jtalk.loop = loop
 
         @self.client.event
         async def on_ready():
@@ -100,6 +130,35 @@ class Mariage:
             print(self.client.user.name)
             print(self.client.user.id)
             print('------')
+
+            #voiceちゃんねる掃除
+            for g in self.client.guilds:
+                for v in g.voice_channels:
+                    for m in v.members:
+                        if m.id == self.client.user.id:
+                            #自分がいたら、接続→切断する
+                            vc = await v.connect()
+                            await vc.disconnect(force=True)
+
+            self.__jtalk.clear()
+            with self.app.app_context():
+                for voice in self.db.session.query(self.Voice):
+                    author = self.client.fetch_user(voice.id)
+                    vc = await self.__jtalk.connect(author)
+                    if vc == None:
+                        self.db.session.delete(voice)
+                self.db.session.commit()
+        
+        @self.client.event
+        async def on_voice_state_update(member, before, after):
+            if after.channel == None:
+                with self.app.app_context():
+                    voice = self.db.session.query(self.Voice).filter_by(id=member.id).first()
+                    if voice == None:
+                        return
+                    await self.__jtalk.disconnect(member.id)
+                    self.db.session.delete(voice)
+                    self.db.session.commit()
 
         def __clean_schedule():
             target = datetime.datetime.now() - datetime.timedelta(days=7)
@@ -176,13 +235,14 @@ class Mariage:
                     await msg.add_reaction('🔄')
 
         @self.client.event
-        async def on_reaction_add(reaction, user):
+        async def on_raw_reaction_add(payload):
+            user = await self.client.fetch_user(payload.user_id)
             # リアクション送信者がBotだった場合は無視する
             if user.bot:
                 return
-            if reaction.emoji == '🔚':
+            if payload.emoji.name == '🔚':
                 with self.app.app_context():
-                    schedule = self.db.session.query(self.Schedule).filter_by(id=reaction.message.id, status='registed').first()
+                    schedule = self.db.session.query(self.Schedule).filter_by(id=payload.message_id, status='registed').first()
                     if schedule != None:
                         now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9)))
                         # 倒してからEND押すまでの時間を考慮して10秒ほど手前にしておく
@@ -194,19 +254,19 @@ class Mariage:
                         
                         await __hunt_report(schedule.channel_id, schedule.id)
                         __set_remind(schedule.id, pop_time, now)
-            elif reaction.emoji == '❌':
+            elif payload.emoji.name == '❌':
                 with self.app.app_context():
-                    schedule = self.db.session.query(self.Schedule).filter_by(id=reaction.message.id).filter(and_(self.Schedule.status!='end')).first()
+                    schedule = self.db.session.query(self.Schedule).filter_by(id=payload.message_id).filter(and_(self.Schedule.status!='end')).first()
                     if schedule != None:
                         if schedule.status != 'registed':
                             self.__scheduler.cancel(schedule.id)
                         schedule.status = 'end'
                         self.db.session.commit()
-                        
-                        await reaction.message.channel.send(schedule.boss.name + '討伐リマインドを取り消しました。')
-            elif reaction.emoji == '🔄':
+                        channel = await self.client.fetch_channel(payload.channel_id)
+                        await channel.send(schedule.boss.name + '討伐リマインドを取り消しました。')
+            elif payload.emoji.name == '🔄':
                 with self.app.app_context():
-                    schedule = self.db.session.query(self.Schedule).filter_by(id=reaction.message.id, status='registed').filter(self.Schedule.pop_time!=None).first()
+                    schedule = self.db.session.query(self.Schedule).filter_by(id=payload.message_id, status='registed').filter(self.Schedule.pop_time!=None).first()
                     if schedule != None:
                         pop_time = schedule.get_jst_pop_time() + datetime.timedelta(minutes=schedule.boss.pop_interval_minutes)
                         schedule.pop_time = pop_time
@@ -232,29 +292,29 @@ class Mariage:
             if message.author.bot:
                 return
             # 「/neko」と発言したら「にゃーん」が返る処理
-            if message.content == '/neko':
+            elif message.content == '/neko':
                 await message.channel.send('にゃーん')
             # 話しかけた人に返信する
-            if self.client.user in message.mentions: # 話しかけられたかの判定
+            elif self.client.user in message.mentions: # 話しかけられたかの判定
                 reply = f'{message.author.mention} 呼んだ？' # 返信メッセージの作成
                 await message.channel.send(reply) # 返信メッセージを送信
             # メンバーのリストを取得して表示
-            if message.content == '/members':
+            elif message.content == '/members':
                 print(message.guild.members)
             # 役職のリストを取得して表示
-            if message.content == '/roles':
+            elif message.content == '/roles':
                 print(message.guild.roles)
             # テキストチャンネルのリストを取得して表示
-            if message.content == '/text_channels':
+            elif message.content == '/text_channels':
                 print(message.guild.text_channels)
             # ボイスチャンネルのリストを取得して表示
-            if message.content == '/voice_channels':
+            elif message.content == '/voice_channels':
                 print(message.guild.voice_channels)
             # カテゴリチャンネルのリストを取得して表示
-            if message.content == '/category_channels':
+            elif message.content == '/category_channels':
                 print(message.guild.categories)
             # イベント配信チャンネル登録
-            if message.content == '/join_news':
+            elif message.content == '/join_news':
                 if (not message.author.guild_permissions.administrator):
                     await message.channel.send('何様のつもり？')
                     return
@@ -268,7 +328,7 @@ class Mariage:
                         self.db.session.add(event)
                         self.db.session.commit()
                         await message.channel.send('こんどからお知らせするよっ！')
-            if message.content == '/leave_news':
+            elif message.content == '/leave_news':
                 if (not message.author.guild_permissions.administrator):
                     await message.channel.send('何様のつもり？')
                     return
@@ -282,7 +342,7 @@ class Mariage:
                     else:
                         await message.channel.send('お知らせしてないよ？？？')
             # ツイート配信チャンネル登録
-            if message.content == '/join_tweet':
+            elif message.content == '/join_tweet':
                 if (not message.author.guild_permissions.administrator):
                     await message.channel.send('何様のつもり？')
                     return
@@ -296,7 +356,7 @@ class Mariage:
                         self.db.session.add(tweet)
                         self.db.session.commit()
                         await message.channel.send('こんどから囀るよっ！')
-            if message.content == '/leave_tweet':
+            elif message.content == '/leave_tweet':
                 if (not message.author.guild_permissions.administrator):
                     await message.channel.send('何様のつもり？')
                     return
@@ -310,10 +370,10 @@ class Mariage:
                     else:
                         await message.channel.send('お知らせしてないよ？？？')
             # 「/hunt_report」と発言したらボス時間登録する
-            if message.content.startswith('/hunt_report'):
+            elif message.content.startswith('/hunt_report'):
                 await __hunt_report(str(message.channel.id))
             # 「/hunt」と発言したらボス時間登録する
-            if message.content.startswith('/hunt '):
+            elif message.content.startswith('/hunt '):
                 items = message.content.split()
                 with self.app.app_context():
                     boss = None
@@ -373,6 +433,76 @@ class Mariage:
                         #    await message.channel.send(kill + 'をリアルハントするんですねっ💖💖💖')
                         #else:
                         await message.channel.send('なんだそりゃ？？？')
+            # 「/vcs」と発言したらボイスチャンネル連携
+            elif message.content.startswith('/vcs'):
+                if message.author.voice == None:
+                    await message.channel.send('ボイスチャンネルに接続してから実行してねっ')
+                    return
+                with self.app.app_context():
+                    voice = self.db.session.query(self.Voice).filter_by(id=message.author.id).first()
+                    if voice == None:
+                        voice = self.Voice(message.author.id, str(message.channel.id))
+                        self.db.session.add(voice)
+                    else:
+                        voice.channel_id = message.channel.id
+                    await self.__jtalk.connect(message.author)
+                    self.db.session.commit()
+                    await message.channel.send('代わりにおしゃべりするよっ')
+            # 「/vce」と発言したらボイスチャンネル終了
+            elif message.content.startswith('/vce'):
+                with self.app.app_context():
+                    voice = self.db.session.query(self.Voice).filter_by(id=message.author.id).first()
+                    if voice == None:
+                        await message.channel.send('ボイスチャンネル連携してないよ？？？')
+                    else:
+                        await self.__jtalk.disconnect(message.author.id)
+                        self.db.session.delete(voice)
+                        self.db.session.commit()
+                        await message.channel.send('おしゃべりおしまーい')
+            # 「/callme」と発言したら呼び名設定
+            elif message.content.startswith('/callme '):
+                items = message.content.split()
+                re_hiragana = re.compile(r'^[ぁ-んー]+$')
+                if not re_hiragana.fullmatch(items[1]):
+                    await message.channel.send('名前は全部ひらがなで設定してねっ')
+                    return
+                with self.app.app_context():
+                    voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
+                    if voice_setting == None:
+                        voice_setting = self.VoiceSetting(message.author.id, items[1])
+                        self.db.session.add(voice_setting)
+                    else:
+                        voice_setting.name = items[1]
+                    self.db.session.commit()
+                    await message.channel.send('今度から「' + message.author.display_name + '」のこと「' + voice_setting.name + '」って呼ぶねっ')
+            # 「/voice」と発言したら呼び名設定
+            elif message.content.startswith('/voice '):
+                items = message.content.split()
+                re_hiragana = re.compile(r'^[0-5r]+$', re.IGNORECASE)
+                if not re_hiragana.fullmatch(items[1]):
+                    await message.channel.send('0-5またはrで設定してねっ')
+                    return
+                htsvoice = random.randint(0, 5) if items[1] == 'r' or items[1] == 'R' else int(items[1])
+                with self.app.app_context():
+                    voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
+                    if voice_setting == None:
+                        voice_setting = self.VoiceSetting(message.author.id, message.author.display_name)
+                        voice_setting.voice = htsvoice
+                        self.db.session.add(voice_setting)
+                    else:
+                        voice_setting.voice = htsvoice
+                    self.db.session.commit()
+                    await message.channel.send('声変わり完了！')
+            else:
+                with self.app.app_context():
+                    voice = self.db.session.query(self.Voice).filter_by(id=message.author.id,channel_id=str(message.channel.id)).first()
+                    if voice == None:
+                        return
+                    voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
+                    name = message.author.display_name if voice_setting == None else voice_setting.name
+                    htsvoice = 0 if voice_setting == None else voice_setting.voice
+                    self.__jtalk.talk(name + ' ' +message.content, message.author, htsvoice)
+
         def __get_end_time(str_date, now):
             if re.match('^[0-2]?[0-9]:[0-5]?[0-9]:[0-5]?[0-9]$', str_date):
                 end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date + '+0900', '%Y/%m/%d %H:%M:%S%z')
@@ -381,6 +511,16 @@ class Mariage:
                 return end_time
             if re.match('^[0-2]?[0-9]:[0-5]?[0-9]$', str_date):
                 end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date + ':00+0900', '%Y/%m/%d %H:%M:%S%z')
+                if end_time > now:
+                    return end_time - datetime.timedelta(days=1)
+                return end_time
+            if re.match('^[0-2][0-9][0-5][0-9][0-5][0-9]$', str_date):
+                end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date[0:2] + ':' + str_date[2:2] + ':' + str_date[4:2] + '+0900', '%Y/%m/%d %H:%M:%S%z')
+                if end_time > now:
+                    return end_time - datetime.timedelta(days=1)
+                return end_time
+            if re.match('^[0-2][0-9][0-5][0-9]$', str_date):
+                end_time = datetime.datetime.strptime(str(now.year) + '/'  +  str(now.month) + '/'+  str(now.day)+ ' ' + str_date[0:2] + ':' + str_date[2:2] + ':00+0900', '%Y/%m/%d %H:%M:%S%z')
                 if end_time > now:
                     return end_time - datetime.timedelta(days=1)
                 return end_time
@@ -414,6 +554,7 @@ class Mariage:
                         self.db.session.commit()
         self.__scheduler.never_hour(lambda : asyncio.ensure_future(__remind_report(), loop=self.client.loop))
         self.__scheduler.never_wednesday('06:00', __clean_schedule)
+
         loop.run_forever()
     
     def broadcast(self, message):

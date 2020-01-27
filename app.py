@@ -9,6 +9,7 @@ import asyncio
 import threading
 import re
 import pytz
+import datetime
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
@@ -79,7 +80,19 @@ if __name__ == "__main__":
         m.db.create_all()
         boss = m.Boss('カスパ', '([かカ][すス][パぱ])|(caspa)', '68', 6)
         m.db.session.add(boss)
+        boss2 = m.Boss('フェニックス', '[ふフ][ぇェ][にニ]', '68', 6)
+        boss2.random = True
+        m.db.session.add(boss2)
         m.db.session.commit()
+        schedule = m.Schedule(1,'593379155328892940', 2)
+        schedule.status = 'alerm'
+        schedule.pop_time = now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9))) + datetime.timedelta(minutes=1)
+        m.db.session.add(schedule)
+        m.db.session.commit()
+else:
+    if not discord.opus.is_loaded(): 
+        #もし未ロードだったら
+        discord.opus.load_opus("heroku-buildpack-libopus")
 
 thread = threading.Thread(target=m.run, args=(os.environ['DISCORD_BOT_TOKEN'],))
 thread.start()
