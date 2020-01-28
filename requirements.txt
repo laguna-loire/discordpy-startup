@@ -1,4 +1,4 @@
--U pip
+pip==20.0.2
 discord.py[voice]==1.2.5
 Flask==1.0.3
 Flask-SQLAlchemy==2.4.0
