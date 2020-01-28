@@ -478,11 +478,17 @@ class Mariage:
             # 「/voice」と発言したら呼び名設定
             elif message.content.startswith('/voice '):
                 items = message.content.split()
-                re_hiragana = re.compile(r'^[0-5r]+$', re.IGNORECASE)
+                re_hiragana = re.compile(r'^([0-5r])|(ai)$', re.IGNORECASE)
                 if not re_hiragana.fullmatch(items[1]):
                     await message.channel.send('0-5またはrで設定してねっ')
                     return
-                htsvoice = random.randint(0, 5) if items[1] == 'r' or items[1] == 'R' else int(items[1])
+                htsvoice = 0
+                if items[1] == 'r' or items[1] == 'R':
+                    htsvoice = random.randint(0, 5)
+                elif items[1] == 'ai':
+                    htsvoice = -1
+                else:
+                    htsvoice = int(items[1])
                 with self.app.app_context():
                     voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
                     if voice_setting == None:
@@ -501,7 +507,10 @@ class Mariage:
                     voice_setting = self.db.session.query(self.VoiceSetting).filter_by(id=message.author.id).first()
                     name = message.author.display_name if voice_setting == None else voice_setting.name
                     htsvoice = 0 if voice_setting == None else voice_setting.voice
-                    self.__jtalk.talk(name + ' ' +message.content, message.author, htsvoice)
+                    if htsvoice < 0:
+                        self.__jtalk.talk_ai(name + ' ' +message.content, message.author)
+                    else:
+                        self.__jtalk.talk(name + ' ' +message.content, message.author, htsvoice)
 
         def __get_end_time(str_date, now):
             if re.match('^[0-2]?[0-9]:[0-5]?[0-9]:[0-5]?[0-9]$', str_date):
