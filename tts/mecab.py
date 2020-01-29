@@ -12,6 +12,11 @@ import threading
 import sys
 if sys.version_info.major >= 3:
 	xrange = range
+try:
+	libc = cdll.msvcrt
+except:
+	from ctypes.util import find_library
+	libc = CDLL(find_library('c'), use_errno = True)
 
 ############################################
 
@@ -32,11 +37,11 @@ FEATURE_ptr_array_ptr = POINTER(FEATURE_ptr_array)
 mecab = None
 lock = threading.Lock()
 
-mc_malloc = cdll.msvcrt.malloc
+mc_malloc = libc.malloc
 mc_malloc.restype = POINTER(c_ubyte)
-mc_calloc = cdll.msvcrt.calloc
+mc_calloc = libc.calloc
 mc_calloc.restype = POINTER(c_ubyte)
-mc_free = cdll.msvcrt.free
+mc_free = libc.free
 
 class NonblockingMecabFeatures(object):
 	def __init__(self):
