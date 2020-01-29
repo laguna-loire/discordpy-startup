@@ -72,6 +72,10 @@ class MecabFeatures(NonblockingMecabFeatures):
 def Mecab_initialize(dic):
 	global mecab
 	if mecab is None:
+		dicrc = os.path.join(dic, 'dicrc')
+		if not os.path.isfile(dicrc):
+			import shutil
+			shutil.copy('./tts/data/dicrc', dicrc)
 		mecab = MeCab.Tagger('-d ' + dic)
 
 def Mecab_analysis(src, features):
