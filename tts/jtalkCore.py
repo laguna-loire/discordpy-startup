@@ -104,15 +104,15 @@ libjt = None
 njd = NJD()
 jpcommon = JPCommon()
 
-def libjt_version():
-	if libjt is None: return "libjt version none"
-	return libjt.jt_version()
+#def libjt_version():
+#	if libjt is None: return "libjt version none"
+#	return libjt.jt_version()
 
 def libjt_initialize(JT_DLL):
 	global libjt, njd, jpcommon
 	
 	if libjt is None: libjt = cdll.LoadLibrary(encode_mbcs(JT_DLL))
-	libjt.jt_version.restype = c_char_p
+	#libjt.jt_version.restype = c_char_p
 
 	# argtypes & restype
 	
