@@ -140,7 +140,7 @@ class Esp:
         idseq += [self.idim - 1]  # <eos>
         return torch.LongTensor(idseq).view(-1).to(self.device)
     
-    def talk(self, text):
+    async def talk(self, text):
         with torch.no_grad():
             x = self.frontend(text)
             c, _, _ = self.model.inference(x, self.inference_args)
@@ -194,7 +194,7 @@ class Jtalk:
             asyncio.ensure_future(self.taco2_wavegan(t, voice, output), loop=self.loop)
     
     async def taco2_wavegan(self, t, voice, output):
-        data = self.esp.talk(t)
+        data = await self.esp.talk(t)
         with open(output, mode='wb') as fout:
             fout.write(data)
         source = discord.FFmpegPCMAudio(output)
