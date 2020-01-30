@@ -9,6 +9,6 @@ pytz==2019.2
 mecab-python3
 http://download.pytorch.org/whl/cpu/torch-1.0.0-cp37-cp37m-linux_x86_64.whl
 numpy==1.18.1
-chainer==7.1.0
+chainer==6.7.0
 matplotlib==3.1.2
 pyyaml==5.3
