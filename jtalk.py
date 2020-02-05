@@ -142,14 +142,22 @@ class Esp:
         idseq += [self.idim - 1]  # <eos>
         return torch.LongTensor(idseq).view(-1).to(self.device)
     
-    async def talk(self, text):
+    def do_talk(self, text, output):
         with torch.no_grad():
             x = self.frontend(text)
             c, _, _ = self.model.inference(x, self.inference_args)
             z = torch.randn(1, 1, c.size(0) * self.config["hop_size"]).to(self.device)
             c = torch.nn.ReplicationPad1d(self.config["generator_params"]["aux_context_window"])(c.unsqueeze(0).transpose(2, 1))
             y = self.vocoder(z, c).view(-1)
-        return make_wav(y.view(-1).cpu().numpy(), self.config["sampling_rate"], True)
+        data = make_wav(y.view(-1).cpu().numpy(), self.config["sampling_rate"], True)
+        with open(output, mode='wb') as fout:
+            fout.write(data)
+    
+    async def talk(self, text, output):
+        thread = threading.Thread(target=self.do_talk, args=(text, output, ))
+        thread.setDaemon(True)
+        thread.start()
+        thread.join()
 
 class Jtalk:
     __lock = threading.Lock()
@@ -236,9 +244,7 @@ class Jtalk:
         if not self.pre_download_model():
             asyncio.ensure_future(self.jtalk(t, output, voice, 0), loop=self.loop)
             return
-        data = await self.esp.talk(t)
-        with open(output, mode='wb') as fout:
-            fout.write(data)
+        await self.esp.talk(t, output)
         source = discord.FFmpegPCMAudio(output)
         await self.play(voice, source)
         os.remove(output)
