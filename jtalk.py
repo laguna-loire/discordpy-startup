@@ -5,6 +5,8 @@ import discord
 import threading
 import torch
 import io
+import aiohttp
+import time
 
 from tts.jtalkCore import libjt_initialize, g2p
 from tts.mecab import Mecab_initialize, MecabFeatures, Mecab_analysis
@@ -151,10 +153,12 @@ class Esp:
 
 class Jtalk:
     __lock = threading.Lock()
+    __esp_lock = threading.Lock()
     loop = None
     voice_dict = dict()
     ch_dict = dict()
-    esp = Esp()
+    esp = None
+    __downloading = False
 
     def clear(self):
         self.voice_dict.clear()
@@ -192,8 +196,46 @@ class Jtalk:
             voice = self.ch_dict[self.voice_dict[author.id]]
             output = './wav/' + str(author.id) + '.wav'
             asyncio.ensure_future(self.taco2_wavegan(t, voice, output), loop=self.loop)
+
+    async def download(self, url, save_path):
+        start = time.time() #1
+        chunk_size = 10 #2
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3600) as resp: #3
+                print('start: {}: {}'.format(resp.status,url))
+
+                with open(save_path, 'wb') as fd:
+                    while True:
+                        chunk = await resp.content.read(chunk_size) #4
+                        if not chunk:
+                            break
+                        fd.write(chunk)
+
+        elapsed = round(time.time() - start)
+        print('end: {}: {}s'.format(save_path, elapsed))
+    
+    async def download_model(self):
+        url = 'https://github.com/laguna-loire/discordpy-startup/blob/feature/datetime/tts/data/model.last1.avg.best?raw=true'
+        await self.download(url, './tts/data/' + os.environ['AI_MODEL'])
+        self.esp = Esp()
+    
+    def pre_download_model(self):
+        if self.esp == None:
+            self.__esp_lock.acquire()
+            if self.__downloading:
+                self.__esp_lock.release()
+            else:
+                self.__downloading = True
+                self.__esp_lock.release()
+                asyncio.ensure_future(self.download_model(), loop=self.loop)
+            return False
+        return True
     
     async def taco2_wavegan(self, t, voice, output):
+        if not self.pre_download_model():
+            asyncio.ensure_future(self.jtalk(t, output, voice, 0), loop=self.loop)
+            return
         data = await self.esp.talk(t)
         with open(output, mode='wb') as fout:
             fout.write(data)

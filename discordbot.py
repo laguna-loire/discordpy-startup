@@ -130,6 +130,7 @@ class Mariage:
             print(self.client.user.name)
             print(self.client.user.id)
             print('------')
+            self.__jtalk.pre_download_model()
 
             #voiceちゃんねる掃除
             for g in self.client.guilds:
