@@ -1,7 +1,4 @@
 model.last1.avg.best
 checkpoint-400000steps.pkl
 vocoder_config.yml
-*.psd
-*.pdf
-/test
-/spec
+*.tar.gz
