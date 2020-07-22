@@ -86,7 +86,7 @@ class Esp:
         dict_path = "./tts/data/train_no_dev_units.txt"
         model_path = "./tts/data/model.last1.avg.best"
         vocoder_path = "./tts/data/checkpoint-400000steps.pkl"
-        vocoder_conf = "./tts/data/config.yml"
+        vocoder_conf = "./tts/data/vocoder_config.yml"
 
         # define device
         import torch
@@ -224,8 +224,12 @@ class Jtalk:
         print('end: {}: {}s'.format(save_path, elapsed))
     
     async def download_model(self):
-        url = 'https://github.com/laguna-loire/discordpy-startup/blob/feature/datetime/tts/data/model.last1.avg.best?raw=true'
-        await self.download(url, './tts/data/' + os.environ['AI_MODEL'])
+        url1 = 'https://github.com/laguna-loire/discordpy-startup/blob/feature/datetime/tts/data/model.last1.avg.best?raw=true'
+        await self.download(url1, './tts/data/' + os.environ['AI_MODEL'])
+        url2 = 'https://github.com/laguna-loire/discordpy-startup/blob/feature/datetime/tts/data/checkpoint-400000steps.pkl?raw=true'
+        await self.download(url2, './tts/data/' + os.environ['AI_VOCODER'])
+        url3 = 'https://github.com/laguna-loire/discordpy-startup/blob/feature/datetime/tts/data/vocoder_config.yaml?raw=true'
+        await self.download(url3, './tts/data/' + os.environ['AI_VOCODER_CONF'])
         self.esp = Esp()
     
     def pre_download_model(self):
