@@ -1,4 +1,4 @@
-aiohttp==3.5.4
+aiohttp==3.6.2
 async-timeout==3.0.1
 attrs==19.3.0
 audioread==2.1.8
@@ -54,4 +54,3 @@ typing-extensions==3.6.6
 websockets==6.0
 Werkzeug==0.16.1
 yarl==1.4.2
-https://download.pytorch.org/whl/cpu/torch-1.4.0%2Bcpu-cp37-cp37m-linux_x86_64.whl
