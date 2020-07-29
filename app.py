@@ -89,8 +89,8 @@ if __name__ == "__main__":
         schedule.pop_time = now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=+9))) + datetime.timedelta(minutes=1)
         m.db.session.add(schedule)
         m.db.session.commit()
-else:
-    #if not discord.opus.is_loaded(): #tts
+#else: #tts
+    #if not discord.opus.is_loaded(): 
         #もし未ロードだったら
     #    discord.opus.load_opus("heroku-buildpack-libopus")
 
