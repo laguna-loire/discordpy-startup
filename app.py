@@ -90,9 +90,9 @@ if __name__ == "__main__":
         m.db.session.add(schedule)
         m.db.session.commit()
 else:
-    if not discord.opus.is_loaded(): 
+    #if not discord.opus.is_loaded(): #tts
         #もし未ロードだったら
-        discord.opus.load_opus("heroku-buildpack-libopus")
+    #    discord.opus.load_opus("heroku-buildpack-libopus")
 
 thread = threading.Thread(target=m.run, args=(os.environ['DISCORD_BOT_TOKEN'],))
 thread.start()
