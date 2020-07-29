@@ -3,7 +3,7 @@ from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, o
 from sqlalchemy.orm import relationship
 from one_time_scheduler import OneTimeScheduler
 from itertools import groupby
-from jtalk import Jtalk
+#from jtalk import Jtalk #tts
 import discord
 import os
 import traceback
@@ -20,7 +20,7 @@ class Mariage:
     app = None
     db = SQLAlchemy()
     __scheduler = OneTimeScheduler()
-    __jtalk = Jtalk()
+    #__jtalk = Jtalk() #tts
 
     def __init__(self, app):
         self.db.init_app(app)
@@ -122,7 +122,7 @@ class Mariage:
         self.client = discord.Client()
         self.__scheduler.run_asyncio(loop)
         
-        self.__jtalk.loop = loop
+        # self.__jtalk.loop = loop #tts
 
         @self.client.event
         async def on_ready():
@@ -130,7 +130,7 @@ class Mariage:
             print(self.client.user.name)
             print(self.client.user.id)
             print('------')
-            self.__jtalk.pre_download_model()
+            #self.__jtalk.pre_download_model() #tts
 
             #voiceちゃんねる掃除
             for g in self.client.guilds:
@@ -141,14 +141,14 @@ class Mariage:
                             vc = await v.connect()
                             await vc.disconnect(force=True)
 
-            self.__jtalk.clear()
-            with self.app.app_context():
-                for voice in self.db.session.query(self.Voice):
-                    author = self.client.fetch_user(voice.id)
-                    vc = await self.__jtalk.connect(author)
-                    if vc == None:
-                        self.db.session.delete(voice)
-                self.db.session.commit()
+            #self.__jtalk.clear() #tts
+            #with self.app.app_context():
+            #    for voice in self.db.session.query(self.Voice):
+            #        author = self.client.fetch_user(voice.id)
+            #        vc = await self.__jtalk.connect(author)
+            #        if vc == None:
+            #            self.db.session.delete(voice)
+            #    self.db.session.commit()
         
         @self.client.event
         async def on_voice_state_update(member, before, after):
