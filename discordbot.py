@@ -79,6 +79,7 @@ class Mariage:
         pop_time= Column(DateTime)
         status =  Column(String(32), index=True)
         user_id = Column(Integer)
+        is_conflict = Column(Boolean, default=False)
 
         def get_jst_pop_time(self):
             return pytz.timezone('Asia/Tokyo').localize(self.pop_time)
@@ -175,9 +176,9 @@ class Mariage:
                 for schedule in group:
                     report = report + schedule.get_jst_pop_time().strftime("%H:%M:%S") + ' ' + schedule.boss.name
                     if target_id != None and schedule.id == target_id:
-                        report = report + ' ← New\n'
+                        report = report + (' 👥' if schedule.is_conflict else '') + ' ← New\n'
                     else:
-                        report = report + '\n'
+                        report = report + (' 👥' if schedule.is_conflict else '') +'\n'
                 if report != '':
                     channel = self.client.get_channel(int(schedule.channel_id))
                     await channel.send(report + '======================')
@@ -231,6 +232,7 @@ class Mariage:
                 self.db.session.add(next_schedule)
                 self.db.session.commit()
                 await msg.add_reaction('🔚')
+                await msg.add_reaction('👥')
                 await msg.add_reaction('❌')
                 if schedule.boss.random:
                     await msg.add_reaction('🔄')
@@ -241,7 +243,7 @@ class Mariage:
             # リアクション送信者がBotだった場合は無視する
             if user.bot:
                 return
-            if payload.emoji.name == '🔚':
+            if payload.emoji.name == '🔚' or payload.emoji.name == '👥':
                 with self.app.app_context():
                     schedule = self.db.session.query(self.Schedule).filter_by(id=payload.message_id, status='registed').first()
                     if schedule != None:
@@ -251,6 +253,10 @@ class Mariage:
                         schedule.pop_time = pop_time
                         schedule.status = 'remind'
                         schedule.user_id = user.id
+
+                        if payload.emoji.name == '👥':
+                            schedule.is_conflict = True
+
                         self.db.session.commit()
                         
                         await __hunt_report(schedule.channel_id, schedule.id)
@@ -403,10 +409,15 @@ class Mariage:
                             if pop_time < now:
                                 await message.channel.send('手遅れです。' + boss.name + 'は' + pop_time.strftime("%H:%M:%S") + 'にEndしています。')
                                 return
+                            
                             msg = await message.channel.send(boss.name + ' End')
                             schedule = self.Schedule(msg.id, str(message.channel.id), boss.id)
                             schedule.pop_time = pop_time
                             schedule.user_id = message.author.id
+
+                            if len(items) > 3 and items[3].startswith('c'):
+                                schedule.is_conflict = True
+
                             remind_seconds = (pop_time - now - datetime.timedelta(minutes=5)).total_seconds()
                             if remind_seconds > 0:
                                 schedule.status = 'remind'
@@ -427,6 +438,7 @@ class Mariage:
                             self.db.session.add(schedule)
                             self.db.session.commit()
                             await msg.add_reaction('🔚')
+                            await msg.add_reaction('👥')
                             await msg.add_reaction('❌')
                     else:
                         #if items[1] in map(lambda x : x.name, message.channel.members):
